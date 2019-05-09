@@ -96,7 +96,7 @@ void token::transfer( name    from,
     stats statstable( _self, sym.raw() );
     const auto& st = statstable.get( sym.raw() );
 
-    require_recipient( from );
+    require_recipient( from );// 把账户添加至通知账户列表中
     require_recipient( to );
 
     check( quantity.is_valid(), "invalid quantity" );

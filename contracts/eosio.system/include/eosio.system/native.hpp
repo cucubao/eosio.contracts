@@ -95,6 +95,17 @@ namespace eosiosystem {
           *  2. new accounts must stake a minimal number of tokens (as set in system parameters)
           *     therefore, this method will execute an inline buyram from receiver for newacnt in
           *     an amount equal to the current new account creation fee.
+          * 
+          *在创建新帐户后调用。 此代码强制执行资源限制规则
+           *用于新帐户以及新帐户命名约定。
+          *
+           * 1.帐户不能包含'。' 强制所有记录为12的符号
+           *字符长没有'。' 直到实施未来的帐户拍卖流程
+           *这可以防止蹲名。
+          *
+           * 2.新帐户必须包含最少数量的令牌（在系统参数中设置）
+           *因此，此方法将从接收器为newacnt执行内联buyram
+           *相当于当前新帐户创建费用的金额。
           */
          [[eosio::action]]
          void newaccount( name             creator,

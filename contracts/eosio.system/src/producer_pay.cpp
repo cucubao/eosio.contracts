@@ -4,7 +4,7 @@
 
 namespace eosiosystem {
 
-   const int64_t  min_pervote_daily_pay = 100'0000;
+   const int64_t  min_pervote_daily_pay = 100'0000;         //相当于100 EOS (EOS精确到小数点后4位,但代码中不使用小数,放大10000倍)
    const int64_t  min_activated_stake   = 150'000'000'0000;
    const double   continuous_rate       = 0.04879;          // 5% annual rate
    const double   perblock_rate         = 0.0025;           // 0.25%
@@ -16,6 +16,7 @@ namespace eosiosystem {
    const int64_t  useconds_per_day      = 24 * 3600 * int64_t(1000000);
    const int64_t  useconds_per_year     = seconds_per_year*1000000ll;
 
+   //添加出块奖励和重选出块节点
    void system_contract::onblock( ignore<block_header> ) {
       using namespace eosio;
 
@@ -30,7 +31,7 @@ namespace eosiosystem {
       // is eventually completely removed, at which point this line can be removed.
       _gstate2.last_block_num = timestamp;
 
-      /** until activated stake crosses this threshold no new rewards are paid */
+      /** until activated stake crosses this threshold no new rewards are paid */ //直到激活的股权超过此阈值，才会支付新的奖励
       if( _gstate.total_activated_stake < min_activated_stake )
          return;
 
@@ -41,6 +42,8 @@ namespace eosiosystem {
       /**
        * At startup the initial producer may not be one that is registered / elected
        * and therefore there may be no producer object for them.
+       *在启动时，初始生产者可能不是注册/选举的生产者
+        *因此可能没有生产者对象。
        */
       auto prod = _producers.find( producer.value );
       if ( prod != _producers.end() ) {
@@ -50,7 +53,7 @@ namespace eosiosystem {
          });
       }
 
-      /// only update block producers once every minute, block_timestamp is in half seconds
+      /// only update block producers once every minute, block_timestamp is in half seconds  每分钟只更新块生成器一次，block_timestamp是半秒
       if( timestamp.slot - _gstate.last_producer_schedule_update.slot > 120 ) {
          update_elected_producers( timestamp );
 
@@ -74,24 +77,26 @@ namespace eosiosystem {
       }
    }
 
+   //节点发起指令要领取奖励时,计算收益
    using namespace eosio;
    void system_contract::claimrewards( const name owner ) {
       require_auth( owner );
 
       const auto& prod = _producers.get( owner.value );
-      check( prod.active(), "producer does not have an active key" );
+      check( prod.active(), "producer does not have an active key" );//生产者没有活动密钥
 
-      check( _gstate.total_activated_stake >= min_activated_stake,
+      check( _gstate.total_activated_stake >= min_activated_stake, //在链激活之前不能要求奖励(所有代币中至少有15％参与投票）
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       const auto ct = current_time_point();
 
-      check( ct - prod.last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );
+      check( ct - prod.last_claim_time > microseconds(useconds_per_day), "already claimed rewards within past day" );//已经在过去一天内获得奖励
 
-      const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );
-      const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();
+      const asset token_supply   = eosio::token::get_supply(token_account, core_symbol().code() );//总量
+      const auto usecs_since_last_fill = (ct - _gstate.last_pervote_bucket_fill).count();//当前时间 - 上回计算收益的时间
 
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > time_point() ) {
+         // 5% * 总量 * 上回计算收益距离现在的时间 / 一年的微秒数    (年化收益是5%,相当于在计算某段时间内的收益)
          auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
 
          auto to_producers     = new_tokens / 5;
@@ -104,16 +109,19 @@ namespace eosiosystem {
             { _self, asset(new_tokens, core_symbol()), std::string("issue tokens for producer pay and savings") }
          );
 
+         // EOS增发量的80% 用于EOS基金池，存在eosio.saving这个账户下
          INLINE_ACTION_SENDER(eosio::token, transfer)(
             token_account, { {_self, active_permission} },
             { _self, saving_account, asset(to_savings, core_symbol()), "unallocated inflation" }
          );
 
+         //出块奖励(总量的0.25%)
          INLINE_ACTION_SENDER(eosio::token, transfer)(
             token_account, { {_self, active_permission} },
             { _self, bpay_account, asset(to_per_block_pay, core_symbol()), "fund per-block bucket" }
          );
 
+         //得票奖励(总量的0.75%)
          INLINE_ACTION_SENDER(eosio::token, transfer)(
             token_account, { {_self, active_permission} },
             { _self, vpay_account, asset(to_per_vote_pay, core_symbol()), "fund per-vote bucket" }
@@ -128,6 +136,8 @@ namespace eosiosystem {
 
       /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and
       /// time duration the vote weight has been held into one metric.
+      ///用于pervote薪资计算的新指标。 而不是投票权重比，我们结合投票权重和
+      ///持续时间投票权重已被保存到一个指标中。
       const auto last_claim_plus_3days = prod.last_claim_time + microseconds(3 * useconds_per_day);
 
       bool crossed_threshold       = (last_claim_plus_3days <= ct);
@@ -146,7 +156,7 @@ namespace eosiosystem {
       // This is okay because in this case the producer will not get paid anything either way.
       // In fact it is desired behavior because the producers votes need to be counted in the global total_producer_votepay_share for the first time.
 
-      int64_t producer_per_block_pay = 0;
+      int64_t producer_per_block_pay = 0;//每个节点平分到的出块奖励 (每个超级节点是轮流出块的, 自己的未领奖出块数/系统总的未领奖出块数)
       if( _gstate.total_unpaid_blocks > 0 ) {
          producer_per_block_pay = (_gstate.perblock_bucket * prod.unpaid_blocks) / _gstate.total_unpaid_blocks;
       }
@@ -157,7 +167,7 @@ namespace eosiosystem {
                                     true // reset votepay_share to zero after updating
                                  );
 
-      int64_t producer_per_vote_pay = 0;
+      int64_t producer_per_vote_pay = 0;//每个节点分配到的得票奖励 (按得票权重)
       if( _gstate2.revision > 0 ) {
          double total_votepay_share = update_total_votepay_share( ct );
          if( total_votepay_share > 0 && !crossed_threshold ) {
@@ -171,6 +181,7 @@ namespace eosiosystem {
          }
       }
 
+      //得票奖励100EOS起领
       if( producer_per_vote_pay < min_pervote_daily_pay ) {
          producer_per_vote_pay = 0;
       }
