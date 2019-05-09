@@ -237,6 +237,12 @@ namespace eosiosystem {
       check( max_claimable - claimable <= stake, "b1 can only claim their tokens over 10 years" );
    }
 
+   /** 质押/解除质押EOS
+    * 1）更新cpu、net的质押表 del_bandwidth_table
+    * 2）更新receiver账户的总体资源表 user_resources_table
+    * 3）更新from账户的 refunds_table ，这个表用于标记赎回中的资源
+    * 4）更新投票权重
+    */
    void system_contract::changebw( name from, name receiver,
                                    const asset stake_net_delta, const asset stake_cpu_delta, bool transfer )
    {
@@ -442,6 +448,8 @@ namespace eosiosystem {
       }
    }
 
+   //质押EOS
+   //transfer参数为true表示from和receiver账户不同，将EOS的资源抵押给receiver并将EOS所有权一并转交
    void system_contract::delegatebw( name from, name receiver,
                                      asset stake_net_quantity,
                                      asset stake_cpu_quantity, bool transfer )
@@ -455,6 +463,7 @@ namespace eosiosystem {
       changebw( from, receiver, stake_net_quantity, stake_cpu_quantity, transfer);
    } // delegatebw
 
+   //解除质押EOS
    void system_contract::undelegatebw( name from, name receiver,
                                        asset unstake_net_quantity, asset unstake_cpu_quantity )
    {
