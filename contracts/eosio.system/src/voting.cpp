@@ -25,7 +25,8 @@ namespace eosiosystem {
 
    /**
     *  This method will create a producer_config and producer_info object for 'producer'
-    *
+    *  注册为注册为超级节点候选账户，只有注册的账户，其他账户才能给它投票 
+    * 
     *  @pre producer is not already registered
     *  @pre producer to register is an account
     *  @pre authority of producer to register
@@ -46,14 +47,14 @@ namespace eosiosystem {
             info.url          = url;
             info.location     = location;
             if ( info.last_claim_time == time_point() )
-               info.last_claim_time = ct;
+               info.last_claim_time = ct; //注册为超级节点候选账户
          });
 
          auto prod2 = _producers2.find( producer.value );
          if ( prod2 == _producers2.end() ) {
             _producers2.emplace( producer, [&]( producer_info2& info ){
                info.owner                     = producer;
-               info.last_votepay_share_update = ct;
+               info.last_votepay_share_update = ct;//注册为超级节点候选账户
             });
             update_total_votepay_share( ct, 0.0, prod->total_votes );
             // When introducing the producer2 table row for the first time, the producer's votes must also be accounted for in the global total_producer_votepay_share at the same time.
@@ -66,11 +67,11 @@ namespace eosiosystem {
             info.is_active       = true;
             info.url             = url;
             info.location        = location;
-            info.last_claim_time = ct;
+            info.last_claim_time = ct; //注册为超级节点候选账户
          });
          _producers2.emplace( producer, [&]( producer_info2& info ){
             info.owner                     = producer;
-            info.last_votepay_share_update = ct;
+            info.last_votepay_share_update = ct; //注册为超级节点候选账户
          });
       }
 
@@ -168,13 +169,14 @@ namespace eosiosystem {
          else
             p.votepay_share = new_votepay_share;
 
-         p.last_votepay_share_update = ct;
+         p.last_votepay_share_update = ct; //节点投票 voteproducer
       } );
 
       return new_votepay_share;
    }
 
    /**
+    *  投票(可以一次性投给多个超级节点候选账户，账户名需要按字母从小到大排序，最多不超过30个账户)
     *  @pre producers must be sorted from lowest to highest and must be registered and active
     *  @pre if proxy is set then no producers can be voted for
     *  @pre if proxy is set then proxy account must exist and be registered as a proxy
@@ -189,6 +191,7 @@ namespace eosiosystem {
     *  @post new proxy will proxied_vote_weight incremented by new vote weight
     *
     *  If voting for a proxy, the producer votes will not change until the proxy updates their own vote.
+    *  如果投票代理，节点投票将不会改变，直到代理更新自己的投票。
     */
    void system_contract::voteproducer( const name voter_name, const name proxy, const std::vector<name>& producers ) {
       require_auth( voter_name );
@@ -200,21 +203,23 @@ namespace eosiosystem {
       }
    }
 
+   //执行投票操作
+   //账户既可以注册为超级节点候选账户，还可以注册为代理账户proxy。代理账户可以集中普通账户的投票权，代替其进行投票。
    void system_contract::update_votes( const name voter_name, const name proxy, const std::vector<name>& producers, bool voting ) {
       //validate input
       if ( proxy ) {
-         check( producers.size() == 0, "cannot vote for producers and proxy at same time" );
-         check( voter_name != proxy, "cannot proxy to self" );
+         check( producers.size() == 0, "cannot vote for producers and proxy at same time" );//不能同时投给超级节点候选账户和代理账户
+         check( voter_name != proxy, "cannot proxy to self" ); //不能代理自己
       } else {
-         check( producers.size() <= 30, "attempt to vote for too many producers" );
+         check( producers.size() <= 30, "attempt to vote for too many producers" ); //一次性只能为30个节点投票 (1票30投)
          for( size_t i = 1; i < producers.size(); ++i ) {
-            check( producers[i-1] < producers[i], "producer votes must be unique and sorted" );
+            check( producers[i-1] < producers[i], "producer votes must be unique and sorted" ); //超级节点候选账户的账户名需要按字母从小到大排序
          }
       }
 
       auto voter = _voters.find( voter_name.value );
-      check( voter != _voters.end(), "user must stake before they can vote" ); /// staking creates voter object
-      check( !proxy || !voter->is_proxy, "account registered as a proxy is not allowed to use a proxy" );
+      check( voter != _voters.end(), "user must stake before they can vote" ); /// staking creates voter object 先质押才能获得投票权
+      check( !proxy || !voter->is_proxy, "account registered as a proxy is not allowed to use a proxy" );//代理节点账户不能投给其他代理节点账户
 
       /**
        * The first time someone votes we calculate and set last_vote_weight, since they cannot unstake until
@@ -228,7 +233,12 @@ namespace eosiosystem {
          }
       }
 
-      auto new_vote_weight = stake2vote( voter->staked );
+      /*
+      为了鼓励用户认真的投票，EOS引入了投票权重的概念。
+      投票的权重会随着时间的推移不断衰减，当用户重新触发vote操作时，投票权重会更新为新权重。
+      所以，用户需要定期为心仪的超级节点重新投票，以保证自己的投票效力不会衰减。
+      */
+      auto new_vote_weight = stake2vote( voter->staked ); //生成新投票权重
       if( voter->is_proxy ) {
          new_vote_weight += voter->proxied_vote_weight;
       }
@@ -245,7 +255,7 @@ namespace eosiosystem {
          } else {
             for( const auto& p : voter->producers ) {
                auto& d = producer_deltas[p];
-               d.first -= voter->last_vote_weight;
+               d.first -= voter->last_vote_weight;//减去老投票权重
                d.second = false;
             }
          }
@@ -265,7 +275,7 @@ namespace eosiosystem {
          if( new_vote_weight >= 0 ) {
             for( const auto& p : producers ) {
                auto& d = producer_deltas[p];
-               d.first += new_vote_weight;
+               d.first += new_vote_weight; //增加新权重
                d.second = true;
             }
          }
@@ -322,6 +332,7 @@ namespace eosiosystem {
    }
 
    /**
+    *  注册为代理账户
     *  An account marked as a proxy can vote with the weight of other accounts which
     *  have selected it as a proxy. Other accounts must refresh their voteproducer to
     *  update the proxy's weight.

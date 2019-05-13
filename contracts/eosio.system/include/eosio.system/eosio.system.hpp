@@ -96,7 +96,7 @@ namespace eosiosystem {
       int64_t              total_activated_stake = 0;//所有代币的抵押率
       time_point           thresh_activated_stake_time;
       uint16_t             last_producer_schedule_size = 0;
-      double               total_producer_vote_weight = 0; /// the sum of all producer votes
+      double               total_producer_vote_weight = 0; /// the sum of all producer votes //所有票数总合
       block_timestamp      last_name_close;
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
@@ -154,7 +154,7 @@ namespace eosiosystem {
    struct [[eosio::table, eosio::contract("eosio.system")]] producer_info2 {
       name            owner;
       double          votepay_share = 0;
-      time_point      last_votepay_share_update;
+      time_point      last_votepay_share_update;  //上次得票股份占比更新时间
 
       uint64_t primary_key()const { return owner.value; }
 

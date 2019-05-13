@@ -306,7 +306,7 @@ namespace eosiosystem {
       check( bid.symbol == core_symbol(), "asset must be system token" );
       check( bid.amount > 0, "insufficient bid" );
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //域名竞标
          token_account, { {bidder, active_permission} },
          { bidder, names_account, bid, std::string("bid name ")+ newname.to_string() }
       );
@@ -362,7 +362,7 @@ namespace eosiosystem {
       bid_refund_table refunds_table(_self, newname.value);
       auto it = refunds_table.find( bidder.value );
       check( it != refunds_table.end(), "refund not found" );
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //域名竞标退回
          token_account, { {names_account, active_permission}, {bidder, active_permission} },
          { names_account, bidder, asset(it->amount), std::string("refund bid on name ")+(name{newname}).to_string() }
       );

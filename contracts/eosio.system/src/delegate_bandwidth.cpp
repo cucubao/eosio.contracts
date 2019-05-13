@@ -122,13 +122,13 @@ namespace eosiosystem {
       // quant_after_fee.amount should be > 0 if quant.amount > 1.
       // If quant.amount == 1, then quant_after_fee.amount == 0 and the next inline transfer will fail causing the buyram action to fail.
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //买ram
          token_account, { {payer, active_permission}, {ram_account, active_permission} },
          { payer, ram_account, quant_after_fee, std::string("buy ram") }
       );
 
       if( fee.amount > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //买ram的招手续费
             token_account, { {payer, active_permission} },
             { payer, ramfee_account, fee, std::string("ram fee") }
          );
@@ -213,7 +213,7 @@ namespace eosiosystem {
          set_resource_limits( res_itr->owner.value, res_itr->ram_bytes + ram_gift_bytes, net, cpu );
       }
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //卖ram
          token_account, { {ram_account, active_permission}, {account, active_permission} },
          { ram_account, account, asset(tokens_out), std::string("sell ram") }
       );
@@ -221,7 +221,7 @@ namespace eosiosystem {
       auto fee = ( tokens_out.amount + 199 ) / 200; /// .5% fee (round up)
       // since tokens_out.amount was asserted to be at least 2 earlier, fee.amount < tokens_out.amount
       if( fee > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //卖ram的手续费
             token_account, { {account, active_permission} },
             { account, ramfee_account, asset(fee, core_symbol()), std::string("sell ram fee") }
          );
@@ -242,6 +242,8 @@ namespace eosiosystem {
     * 2）更新receiver账户的总体资源表 user_resources_table
     * 3）更新from账户的 refunds_table ，这个表用于标记赎回中的资源
     * 4）更新投票权重
+    * 
+    * transfer参数为true表示from和receiver账户不同，将EOS的资源抵押给receiver并将EOS所有权一并转交
     */
    void system_contract::changebw( name from, name receiver,
                                    const asset stake_net_delta, const asset stake_cpu_delta, bool transfer )
@@ -331,6 +333,14 @@ namespace eosiosystem {
 
       // create refund or update from existing refund
       if ( stake_account != source_stake_from ) { //for eosio both transfer and refund make no sense
+
+      /**
+       * 对于refund表的更新，根据不同条件有不同操作：
+         1）如果是undelegatebw操作，refund表中的cpu和net资源增加，表示为待赎回，request_time更新为目前的时间，这个时间很重要，会在计算赎回周期时用到。
+         2）如果是delegatebw给自己的操作，会优先从refund表中取尚未赎回的cpu和net，重新做抵押。如果refund表中不够，就从余额表中取EOS进行抵押
+         3）如果refund表中cpu和net的额度不为0，则need_deferred_trx标记为true，表示三天赎回周期到了后，要调用refund方法赎回EOS。
+         4）如果from和receiver不同，会触发transfer操作，将质押的EOS所有权也一并转让。 
+       */
          refunds_table refunds_tbl( _self, from.value );
          auto req = refunds_tbl.find( from.value );
 
@@ -412,7 +422,7 @@ namespace eosiosystem {
 
          auto transfer_amount = net_balance + cpu_balance;
          if ( 0 < transfer_amount.amount ) {
-            INLINE_ACTION_SENDER(eosio::token, transfer)(
+            INLINE_ACTION_SENDER(eosio::token, transfer)( //质押eos换资源
                token_account, { {source_stake_from, active_permission} },
                { source_stake_from, stake_account, asset(transfer_amount), std::string("stake bandwidth") }
             );
@@ -477,17 +487,18 @@ namespace eosiosystem {
       changebw( from, receiver, -unstake_net_quantity, -unstake_cpu_quantity, false);
    } // undelegatebw
 
-
+   //赎回EOS
    void system_contract::refund( const name owner ) {
       require_auth( owner );
 
       refunds_table refunds_tbl( _self, owner.value );
       auto req = refunds_tbl.find( owner.value );
       check( req != refunds_tbl.end(), "refund request not found" );
+      //判断refund表中的request_time+refund_delay是否小于当前时间
       check( req->request_time + seconds(refund_delay_sec) <= current_time_point(),
              "refund is not available yet" );
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)(
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //取消质押
          token_account, { {stake_account, active_permission}, {req->owner, active_permission} },
          { stake_account, req->owner, req->net_amount + req->cpu_amount, std::string("unstake") }
       );

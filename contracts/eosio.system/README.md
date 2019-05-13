@@ -3,6 +3,7 @@ eosio.system
 
 This contract provides multiple functionalities:
 - Users can stake tokens for CPU and Network bandwidth, and then vote for producers or delegate their vote to a proxy.
+- 用户可以使用令牌来获取CPU和网络带宽，然后投票给生产者或将他们的投票委托给代理
 - Producers register in order to be voted for, and can claim per-block and per-vote rewards.
 - Users can buy and sell RAM at a market-determined price.
 - Users can bid on premium names.
@@ -25,9 +26,12 @@ The naming convention is codeaccount::actionname followed by a list of paramters
    - Voter can vote for a proxy __or__ a list of at most 30 producers. Storage change is billed to `voter`.
 
 ## eosio::regproxy proxy is_proxy
-   - **proxy** the account registering as voter proxy (or unregistering)
+   - **proxy** the account registering as voter proxy (or unregistering) 
+   - 注册为选民代理（或取消注册）的帐户
    - **is_proxy** if true, proxy is registered; if false, proxy is unregistered
+   - 如果是，则代理注册; 如果为false，则代理未注册
    - Storage change is billed to `proxy`.
+   - 存储更改按“代理”计费。
    
 ## eosio::delegatebw from receiver stake\_net\_quantity stake\_cpu\_quantity transfer
    - **from** account holding tokens to be staked
@@ -74,6 +78,7 @@ The naming convention is codeaccount::actionname followed by a list of paramters
    - **amount** amount of tokens to be used for purchase
    - 'amount' tokens are taken out of 'from' REX fund.
    - User must vote for at least 21 producers or delegate vote to proxy before buying REX.
+   - 在购买REX之前，用户必须为至少21个生产者投票或委托投票代理。
    - Tokens used in purchase are added to user's voting power.
    - Bought REX cannot be sold before 4 days counting from end of day of purchase.
    - Storage change is billed to 'from' account.
@@ -86,6 +91,7 @@ The naming convention is codeaccount::actionname followed by a list of paramters
    - **from_net** amount of tokens to be unstaked from NET bandwidth and used for REX purchase
    - **from_cpu** amount of tokens to be unstaked from CPU bandwidth and used for REX purchase
    - User must vote for at least 21 producers or delegate vote to proxy before buying REX.
+   - 在购买REX之前，用户必须为至少21个生产者投票或委托投票代理。
    - Tokens used in purchase are added to user's voting power.
    - Bought REX cannot be sold before 4 days counting from end of day of purchase.
    - Storage change is billed to 'owner' account.

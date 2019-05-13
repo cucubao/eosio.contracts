@@ -110,19 +110,19 @@ namespace eosiosystem {
          );
 
          // EOS增发量的80% 用于EOS基金池，存在eosio.saving这个账户下
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //增发->EOS基金池
             token_account, { {_self, active_permission} },
             { _self, saving_account, asset(to_savings, core_symbol()), "unallocated inflation" }
          );
 
-         //出块奖励(总量的0.25%)
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         //出块奖励(总量的0.25%) -> eosio.bpay
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //增发->出块奖励池
             token_account, { {_self, active_permission} },
             { _self, bpay_account, asset(to_per_block_pay, core_symbol()), "fund per-block bucket" }
          );
 
-         //得票奖励(总量的0.75%)
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         //得票奖励(总量的0.75%) -> eosio.vpay
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //增发->得票奖励池
             token_account, { {_self, active_permission} },
             { _self, vpay_account, asset(to_per_vote_pay, core_symbol()), "fund per-vote bucket" }
          );
@@ -136,18 +136,21 @@ namespace eosiosystem {
 
       /// New metric to be used in pervote pay calculation. Instead of vote weight ratio, we combine vote weight and
       /// time duration the vote weight has been held into one metric.
-      ///用于pervote薪资计算的新指标。 而不是投票权重比，我们结合投票权重和
-      ///持续时间投票权重已被保存到一个指标中。
+      ///用于pervote薪资计算的新指标。 而不是投票权重比，我们结合投票权重和持续时间投票权重已被保存到一个指标中。
+      ///得票股份占比 (得票股份=得票分数*时间差)
+
+
+      //节点超过3天不claimrewards的话，得票奖励会被清0，损失的奖励继续在得票奖励池子里。等于变相的增加了其他节点的奖励
       const auto last_claim_plus_3days = prod.last_claim_time + microseconds(3 * useconds_per_day);
 
-      bool crossed_threshold       = (last_claim_plus_3days <= ct);
-      bool updated_after_threshold = true;
+      bool crossed_threshold       = (last_claim_plus_3days <= ct);//是否超过3天
+      bool updated_after_threshold = true;//是否超过3天没领
       if ( prod2 != _producers2.end() ) {
          updated_after_threshold = (last_claim_plus_3days <= prod2->last_votepay_share_update);
       } else {
          prod2 = _producers2.emplace( owner, [&]( producer_info2& info  ) {
             info.owner                     = owner;
-            info.last_votepay_share_update = ct;
+            info.last_votepay_share_update = ct;//申领操作claimrewards
          });
       }
 
@@ -164,18 +167,18 @@ namespace eosiosystem {
       double new_votepay_share = update_producer_votepay_share( prod2,
                                     ct,
                                     updated_after_threshold ? 0.0 : prod.total_votes,
-                                    true // reset votepay_share to zero after updating
+                                    true // reset votepay_share to zero after updating  将votepay份额重置为零
                                  );
 
-      int64_t producer_per_vote_pay = 0;//每个节点分配到的得票奖励 (按得票权重)
-      if( _gstate2.revision > 0 ) {
-         double total_votepay_share = update_total_votepay_share( ct );
+      int64_t producer_per_vote_pay = 0;//每个节点分配到的得票奖励 (按得票股份占比)
+      if( _gstate2.revision > 0 ) {//合约版本1.3.0之后,新的规则
+         double total_votepay_share = update_total_votepay_share( ct ); //总得票股份
          if( total_votepay_share > 0 && !crossed_threshold ) {
             producer_per_vote_pay = int64_t((new_votepay_share * _gstate.pervote_bucket) / total_votepay_share);
             if( producer_per_vote_pay > _gstate.pervote_bucket )
                producer_per_vote_pay = _gstate.pervote_bucket;
          }
-      } else {
+      } else { //合约版本1.3.0之前 按照得票占比分配
          if( _gstate.total_producer_vote_weight > 0 ) {
             producer_per_vote_pay = int64_t((_gstate.pervote_bucket * prod.total_votes) / _gstate.total_producer_vote_weight);
          }
@@ -193,18 +196,20 @@ namespace eosiosystem {
       update_total_votepay_share( ct, -new_votepay_share, (updated_after_threshold ? prod.total_votes : 0.0) );
 
       _producers.modify( prod, same_payer, [&](auto& p) {
-         p.last_claim_time = ct;
+         p.last_claim_time = ct; //申领操作 claimrewards
          p.unpaid_blocks   = 0;
       });
 
+      //eosio.bpay -> 请求的节点
       if( producer_per_block_pay > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //出块奖励池->节点
             token_account, { {bpay_account, active_permission}, {owner, active_permission} },
             { bpay_account, owner, asset(producer_per_block_pay, core_symbol()), std::string("producer block pay") }
          );
       }
+      // eosio.vpay -> 请求的节点
       if( producer_per_vote_pay > 0 ) {
-         INLINE_ACTION_SENDER(eosio::token, transfer)(
+         INLINE_ACTION_SENDER(eosio::token, transfer)( //得票奖励池->节点
             token_account, { {vpay_account, active_permission}, {owner, active_permission} },
             { vpay_account, owner, asset(producer_per_vote_pay, core_symbol()), std::string("producer vote pay") }
          );
