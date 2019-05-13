@@ -295,6 +295,7 @@ namespace eosiosystem {
       _gstate2.revision = revision;
    }
 
+   //竞拍账号名
    void system_contract::bidname( name bidder, name newname, asset bid ) {
       require_auth( bidder );
       check( newname.suffix() == newname, "you can only bid on top-level suffix" );
@@ -306,7 +307,7 @@ namespace eosiosystem {
       check( bid.symbol == core_symbol(), "asset must be system token" );
       check( bid.amount > 0, "insufficient bid" );
 
-      INLINE_ACTION_SENDER(eosio::token, transfer)( //域名竞标
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //竞拍账号名
          token_account, { {bidder, active_permission} },
          { bidder, names_account, bid, std::string("bid name ")+ newname.to_string() }
       );
@@ -362,7 +363,7 @@ namespace eosiosystem {
       bid_refund_table refunds_table(_self, newname.value);
       auto it = refunds_table.find( bidder.value );
       check( it != refunds_table.end(), "refund not found" );
-      INLINE_ACTION_SENDER(eosio::token, transfer)( //域名竞标退回
+      INLINE_ACTION_SENDER(eosio::token, transfer)( //竞拍账号名 退回
          token_account, { {names_account, active_permission}, {bidder, active_permission} },
          { names_account, bidder, asset(it->amount), std::string("refund bid on name ")+(name{newname}).to_string() }
       );
@@ -440,7 +441,7 @@ namespace eosiosystem {
       check( itr == _rammarket.end(), "system contract has already been initialized" );
 
       auto system_token_supply   = eosio::token::get_supply(token_account, core.code() );
-      check( system_token_supply.symbol == core, "specified core symbol does not exist (precision mismatch)" );
+      check( system_token_supply.symbol == core, "specified core symbol does not exist (precision mismatch)" ); //原生币不存在（精度不匹配）
 
       check( system_token_supply.amount > 0, "system token supply must be greater than 0" );
       _rammarket.emplace( _self, [&]( auto& m ) {

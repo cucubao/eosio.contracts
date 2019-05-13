@@ -43,7 +43,7 @@ namespace eosiosystem {
        * At startup the initial producer may not be one that is registered / elected
        * and therefore there may be no producer object for them.
        *在启动时，初始生产者可能不是注册/选举的生产者
-        *因此可能没有生产者对象。
+       *因此可能没有生产者对象。
        */
       auto prod = _producers.find( producer.value );
       if ( prod != _producers.end() ) {
