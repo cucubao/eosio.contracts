@@ -15,9 +15,10 @@ const {
 
 const chainId = EOSIO_API_ENDPOINT || chainIds[EOSIO_NETWORK] || chainIds.local;
 
+// keyProvider是默认钱包的初始密钥
 const eos = Eos({
   keyProvider: '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3',
-  httpEndpoint: process.env.EOSIO_API_ENDPOINT || 'http://0.0.0.0:8888',
+  httpEndpoint: process.env.EOSIO_API_ENDPOINT || 'http://127.0.0.1:8888',   //eos studio http://0.0.0.0:8888
   chainId,
 });
 
