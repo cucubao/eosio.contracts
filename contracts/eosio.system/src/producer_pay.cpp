@@ -32,7 +32,7 @@ namespace eosiosystem {
       _gstate2.last_block_num = timestamp;
 
       /** until activated stake crosses this threshold no new rewards are paid */ //直到激活的股权超过此阈值，才会支付新的奖励
-      if( _gstate.total_activated_stake < min_activated_stake )
+      if( _gstate.total_activated_stake < min_activated_stake ) //至少质押150000000个币才能激活链
          return;
 
       if( _gstate.last_pervote_bucket_fill == time_point() )  /// start the presses
@@ -85,7 +85,7 @@ namespace eosiosystem {
       const auto& prod = _producers.get( owner.value );
       check( prod.active(), "producer does not have an active key" );//生产者没有活动密钥
 
-      check( _gstate.total_activated_stake >= min_activated_stake, //在链激活之前不能要求奖励(所有代币中至少有15％参与投票）
+      check( _gstate.total_activated_stake >= min_activated_stake, //在链激活之前不能要求奖励(//至少质押150000000个币才能激活链）
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       const auto ct = current_time_point();

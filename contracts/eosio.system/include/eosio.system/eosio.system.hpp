@@ -133,7 +133,7 @@ namespace eosiosystem {
 
    struct [[eosio::table, eosio::contract("eosio.system")]] producer_info {
       name                  owner;
-      double                total_votes = 0;
+      double                total_votes = 0;    //节点的得票权重
       eosio::public_key     producer_key; /// a packed public key object
       bool                  is_active = true;
       std::string           url;

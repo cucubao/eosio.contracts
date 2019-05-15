@@ -228,6 +228,7 @@ namespace eosiosystem {
        */
       if( voter->last_vote_weight <= 0.0 ) {
          _gstate.total_activated_stake += voter->staked;
+         //至少质押150000000个币才能激活链
          if( _gstate.total_activated_stake >= min_activated_stake && _gstate.thresh_activated_stake_time == time_point() ) {
             _gstate.thresh_activated_stake_time = current_time_point();
          }
