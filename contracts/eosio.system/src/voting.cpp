@@ -244,6 +244,7 @@ namespace eosiosystem {
          new_vote_weight += voter->proxied_vote_weight;
       }
 
+      // 每次投票时，我们必须首先“撤销”最后一次投票权重，然后再投出新的投票权重。
       boost::container::flat_map<name, pair<double, bool /*new*/> > producer_deltas;
       if ( voter->last_vote_weight > 0 ) {
          if( voter->proxy ) {
@@ -326,10 +327,22 @@ namespace eosiosystem {
       update_total_votepay_share( ct, -total_inactive_vpay_share, delta_change_rate );
 
       _voters.modify( voter, same_payer, [&]( auto& av ) {
-         av.last_vote_weight = new_vote_weight;
+         av.last_vote_weight = new_vote_weight; //设置为出新的投票权重
          av.producers = producers;
          av.proxy     = proxy;
+
+         if(av.first_vote_time==0)
+            av.first_vote_time = current_time_point_sec().sec_since_epoch(); //wcc 记录第一次投票时间(秒)
       });
+
+      //wcc
+      //test 投票后直接给token
+      // int64_t per_vote_pay = 1;//1 相当于0.0001
+      // INLINE_ACTION_SENDER(eosio::token, transfer)(//test
+      //       token_account, { {saving_account, active_permission}, {voter_name, active_permission} },
+      //       { saving_account, voter_name, asset(per_vote_pay, core_symbol()), std::string("pay to voter") }
+      //    );
+      //wcc end
    }
 
    /**
@@ -362,7 +375,7 @@ namespace eosiosystem {
    }
 
    void system_contract::propagate_weight_change( const voter_info& voter ) {
-      check( !voter.proxy || !voter.is_proxy, "account registered as a proxy is not allowed to use a proxy" );
+      check( !voter.proxy || !voter.is_proxy, "account registered as a proxy is not allowed to use a proxy" );//代理不能投给代理
       double new_weight = stake2vote( voter.staked );
       if ( voter.is_proxy ) {
          new_weight += voter.proxied_vote_weight;

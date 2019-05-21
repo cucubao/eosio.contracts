@@ -104,6 +104,7 @@ namespace eosiosystem {
          auto to_per_block_pay = to_producers / 4;
          auto to_per_vote_pay  = to_producers - to_per_block_pay;
 
+         // 先都发行到eosio这个账户下 (_self 类成员变量所代表的是 部署当前system合约的账号,这里指eosio)
          INLINE_ACTION_SENDER(eosio::token, issue)(
             token_account, { {_self, active_permission} },
             { _self, asset(new_tokens, core_symbol()), std::string("issue tokens for producer pay and savings") }

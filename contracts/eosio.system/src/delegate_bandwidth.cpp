@@ -78,7 +78,7 @@ namespace eosiosystem {
     *  facilitates simpler API for per-user queries
     */
    typedef eosio::multi_index< "userres"_n, user_resources >      user_resources_table;
-   typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;
+   typedef eosio::multi_index< "delband"_n, delegated_bandwidth > del_bandwidth_table;  //质押资源记录表
    typedef eosio::multi_index< "refunds"_n, refund_request >      refunds_table;
 
 
@@ -229,9 +229,12 @@ namespace eosiosystem {
       }
    }
 
+   // Block.one(EOS团队)的期权兑现计划
+   // Block.one 在 EOS 主网上有第一个自定义短账户名和命名空间， b1。他们进行了为期一年的代币分发，他们卖出了9亿代币，剩下的1亿个代币被存入了他们的账户
+   // `b1` 帐户在某时间点能够赎回的 EOS 数量
    void validate_b1_vesting( int64_t stake ) {
       const int64_t base_time = 1527811200; /// 2018-06-01
-      const int64_t max_claimable = 100'000'000'0000ll;
+      const int64_t max_claimable = 100'000'000'0000ll;//代币的领取的最大数量 等于它们发给自己代币数
       const int64_t claimable = int64_t(max_claimable * double(now()-base_time) / (10*seconds_per_year) );
 
       check( max_claimable - claimable <= stake, "b1 can only claim their tokens over 10 years" );
@@ -259,6 +262,7 @@ namespace eosiosystem {
          from = receiver;
       }
 
+      // 1）更新cpu、net的质押表 del_bandwidth_table
       // update stake delegated from "from" to "receiver"
       {
          del_bandwidth_table     del_tbl( _self, from.value );
@@ -284,6 +288,7 @@ namespace eosiosystem {
          }
       } // itr can be invalid, should go out of scope
 
+      // 2）更新receiver账户的总体资源表 user_resources_table
       // update totals of "receiver"
       {
          user_resources_table   totals_tbl( _self, receiver.value );
@@ -318,7 +323,7 @@ namespace eosiosystem {
             if( !(net_managed && cpu_managed) ) {
                int64_t ram_bytes, net, cpu;
                get_resource_limits( receiver.value, &ram_bytes, &net, &cpu );
-
+               //将资源限制更新到链的虚拟机代码中
                set_resource_limits( receiver.value,
                                     ram_managed ? ram_bytes : std::max( tot_itr->ram_bytes + ram_gift_bytes, ram_bytes ),
                                     net_managed ? net : tot_itr->net_weight.amount,
@@ -331,6 +336,7 @@ namespace eosiosystem {
          }
       } // tot_itr can be invalid, should go out of scope
 
+      //  3）更新from账户的 refunds_table ，这个表用于标记赎回中的资源
       // create refund or update from existing refund
       if ( stake_account != source_stake_from ) { //for eosio both transfer and refund make no sense
 
@@ -422,34 +428,56 @@ namespace eosiosystem {
 
          auto transfer_amount = net_balance + cpu_balance;
          if ( 0 < transfer_amount.amount ) {
-            INLINE_ACTION_SENDER(eosio::token, transfer)( //质押eos换资源
+            INLINE_ACTION_SENDER(eosio::token, transfer)( //质押eos换资源,如果transfer为true,将质押的EOS所有权也一并转让
                token_account, { {source_stake_from, active_permission} },
                { source_stake_from, stake_account, asset(transfer_amount), std::string("stake bandwidth") }
             );
          }
       }
 
+      // 4）更新投票权重
       vote_stake_updater( from );
-      update_voting_power( from, stake_net_delta + stake_cpu_delta );
+      update_voting_power( from, stake_net_delta + stake_cpu_delta );//质押与取消质押时,更新投票权重
    }
 
-   void system_contract::update_voting_power( const name& voter, const asset& total_update )
+   void system_contract::update_voting_power( const name& voter, const asset& total_update )//更新投票权重
    {
       auto voter_itr = _voters.find( voter.value );
       if( voter_itr == _voters.end() ) {
          voter_itr = _voters.emplace( voter, [&]( auto& v ) {
             v.owner  = voter;
-            v.staked = total_update.amount;
+            v.staked = total_update.amount; //用于投票的质押数量
          });
       } else {
          _voters.modify( voter_itr, same_payer, [&]( auto& v ) {
+         
+            //wcc test
+            //先计算原来的质押资源的投票收益
+            if(v.first_vote_time)
+            {
+               uint32_t now = current_time_point_sec().sec_since_epoch();
+               //收益公式 = staked * (分钟化的收益率) * 票龄 (按分钟算)
+               const int64_t rewardrate = 5;//千分之一
+               int64_t reward = v.staked * rewardrate * (now - v.first_vote_time) / 60 / 1000; //按分钟算 最小的计价单位,无小数点
+               print(  name{voter}," now:",now," first_vote_time:",v.first_vote_time," v.staked :",v.staked," reward:",reward, "\n" );
+
+               //给收益
+               INLINE_ACTION_SENDER(eosio::token, transfer)(//test
+                     token_account, { {saving_account, active_permission}, {voter, active_permission} },
+                     { saving_account, voter, asset(reward, core_symbol()), std::string("pay to voter") }
+                  );
+
+               v.first_vote_time = now; //更新记录的时间
+            }
+            //wcc test end
+
             v.staked += total_update.amount;
          });
       }
 
       check( 0 <= voter_itr->staked, "stake for voting cannot be negative" );
 
-      if( voter == "b1"_n ) {
+      if( voter == "b1"_n ) { //Block.one的期权兑现计划
          validate_b1_vesting( voter_itr->staked );
       }
 

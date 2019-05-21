@@ -1,5 +1,6 @@
 var expect = require('chai').expect;
 
+callback = (err, res) => { err ? console.error(err) : console.log(res) };
 
 describe('Global eos', () => {
   it('is an object', () => {
@@ -24,7 +25,6 @@ describe('Global eos', () => {
     //查余额
     eos.getCurrencyBalance({ code: "eosio.token", account: "eosio", symbol: "SYS" }).then(result => console.log("eosio的余额: "+result));
     //代币信息
-    callback = (err, res) => { err ? console.error(err) : console.log(res) };
     eos.getCurrencyStats({code: "eosio.token", symbol: "SYS"}, callback);
 
     //获取智能合约代码
@@ -33,8 +33,9 @@ describe('Global eos', () => {
     // eos.getAbi({ account_name: "eosio"}, callback)
     
     // 获取Table行数据 (某合约内某张数据表的某个key对应的value)
-    eos.getTableRows({scope:"SYS", code:"eosio.token", table:"stat", json: true},callback)
-    eos.getTableRows({scope:"eosio", code:"eosio.token", table:"accounts", json: true},callback)
+    // eos.getTableRows({scope:"SYS", code:"eosio.token", table:"stat", json: true},callback)
+    // eos.getTableRows({scope:"eosio", code:"eosio.token", table:"accounts", json: true},callback)
+    // eos.getTableRows({scope:"voter1", code:"eosio", table:"voters", json: true},callback)
   });
   //#endregion
 
@@ -50,7 +51,6 @@ describe('Global eos', () => {
   //   eos.getCurrencyBalance({ code: "eosio.token", account: "eosio", symbol: "ATC" }).then(result => console.log("eosio的余额: "+result));
   //   // eos.getCurrencyBalance({ code: "eosio.token", account: "eosio", symbol: "EOS" }).then(result => console.log("eosio的余额: "+result));
   //   //代币信息
-  //   callback = (err, res) => { err ? console.error(err) : console.log(res) };
   //   eos.getCurrencyStats({code: "eosio.token", symbol: "ATC"}, callback);
   //   // eos.getCurrencyStats({code: "eosio.token", symbol: "EOS"}, callback);
     
@@ -60,22 +60,46 @@ describe('Global eos', () => {
   // });
   //#endregion
 
-  callback = (err, res) => { err ? console.error(err) : console.log(res) };
-  //投票
-  it('test vote', async () => {
+  //质押
+  it('test stake', async () => {
     options = {
       authorization: 'voter1@active',
       broadcast: true,
       sign: true
     }
-    eos.voteproducer("voter1","",["bp1","hello"],options,callback)
+
+    await eos.getCurrencyBalance({ code: "eosio.token", account: "voter1", symbol: "SYS" }).then(result => console.log("voter1的余额1: "+result));
+
+    await eos.transaction(tr => {
+      tr.delegatebw({
+          from: "voter1",
+          receiver: "voter1", //为自己抵押
+          stake_net_quantity: "0.0000 SYS",
+          stake_cpu_quantity: "0.0001 SYS",
+          transfer: 0
+      })
+    })
+ 
+    await eos.getCurrencyBalance({ code: "eosio.token", account: "voter1", symbol: "SYS" }).then(result => console.log("voter1的余额2: "+result));
 
   });
 
+  //投票
+  // it('test vote', async () => {
+  //   options = {
+  //     authorization: 'voter1@active',
+  //     broadcast: true,
+  //     sign: true
+  //   }
+
+  //   await eos.getCurrencyBalance({ code: "eosio.token", account: "voter1", symbol: "SYS" }).then(result => console.log("voter1的余额: "+result));
+  //   await eos.voteproducer("voter1","",["bp1","hello"],options)//,callback
+  //   await eos.getCurrencyBalance({ code: "eosio.token", account: "voter1", symbol: "SYS" }).then(result => console.log("voter1的余额: "+result));
+
+  // });
+
   //智能合约的执行
   // it('call hello contract', async () => {
-  //   callback = (err, res) => { err ? console.error(err) : console.log(res) };
-
   //   eos.contract("hello").then(hello => {  //hello随便起的变量名
   //     hello.hi('axay', {                         //hi是方法名, 'axay'是该hello合约hi方法的参数
   //       authorization: ['eosio']        //建立该合约的用户
@@ -87,8 +111,6 @@ describe('Global eos', () => {
 
   //#region 转账交易
   // it('do transfer', async () => {
-  //   callback = (err, res) => { err ? console.error(err) : console.log(res) };
-
   //   //转账交易 方法1
   //   options = {
   //     authorization: 'eosio@active',

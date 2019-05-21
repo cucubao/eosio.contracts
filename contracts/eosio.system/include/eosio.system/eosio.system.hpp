@@ -166,26 +166,29 @@ namespace eosiosystem {
       name                owner;     /// the voter
       name                proxy;     /// the proxy set by the voter, if any
       std::vector<name>   producers; /// the producers approved by this voter if no proxy set
-      int64_t             staked = 0;
+      int64_t             staked = 0;/// 用于投票的质押数量
 
       /**
        *  Every time a vote is cast we must first "undo" the last vote weight, before casting the
        *  new vote weight.  Vote weight is calculated as:
+       *  每次投票时，我们必须首先“撤销”最后一次投票权重，然后再投出新的投票权重。
        *
        *  stated.amount * 2 ^ ( weeks_since_launch/weeks_per_year)
        */
-      double              last_vote_weight = 0; /// the vote weight cast the last time the vote was updated
+      double              last_vote_weight = 0; /// the vote weight cast the last time the vote was updated 最后一次投票更新时投票权重
 
       /**
-       * Total vote weight delegated to this voter.
+       * Total vote weight delegated to this voter. 委派给这位选民的总投票权重。
        */
-      double              proxied_vote_weight= 0; /// the total vote weight delegated to this voter as a proxy
-      bool                is_proxy = 0; /// whether the voter is a proxy for others
+      double              proxied_vote_weight= 0; /// the total vote weight delegated to this voter as a proxy 作为代理人，该投票权的总投票权重
+      bool                is_proxy = 0; /// whether the voter is a proxy for others 选民是否代表他人
 
 
       uint32_t            flags1 = 0;
-      uint32_t            reserved2 = 0;
-      eosio::asset        reserved3;
+      // uint32_t            reserved2 = 0;  //保留字段  //wcc 记录第一次投票时间(秒)
+      uint32_t             first_vote_time = 0;  //第一次投票时间 (秒)
+
+      eosio::asset        reserved3;      //保留字段
 
       uint64_t primary_key()const { return owner.value; }
 
@@ -196,7 +199,8 @@ namespace eosiosystem {
       };
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
-      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
+      // EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(reserved2)(reserved3) )
+      EOSLIB_SERIALIZE( voter_info, (owner)(proxy)(producers)(staked)(last_vote_weight)(proxied_vote_weight)(is_proxy)(flags1)(first_vote_time)(reserved3) )
    };
 
    typedef eosio::multi_index< "voters"_n, voter_info >  voters_table;
